@@ -1,0 +1,572 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Activity Tracker Analytics</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <script src="chart.umd.js" onerror="this.onerror=null;this.src='https://cdn.jsdelivr.net/npm/chart.js';"></script>
+    <style>
+        :root {
+            --bg-base: #0f0d1a;
+            --bg-surface: #161325;
+            --bg-surface-hover: #1f1b33;
+            --border-color: rgba(122, 131, 194, 0.16);
+            --border-glow: rgba(122, 131, 194, 0.3);
+            
+            --text-primary: #f0f2fe;
+            --text-secondary: #a9b1d6;
+            --text-muted: #565f89;
+            
+            --c-dev: #4fd6be;
+            --c-term: #7aa2f7;
+            --c-web: #f7768e;
+            --c-media: #bb9af7;
+            --c-idle: #e0af68;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Outfit', sans-serif;
+            background-color: var(--bg-base);
+            color: var(--text-primary);
+            padding: 1.5rem;
+            min-height: 100vh;
+            overflow-x: hidden;
+            background-image: 
+                radial-gradient(circle at 10% 10%, rgba(122, 131, 194, 0.08) 0%, transparent 40%),
+                radial-gradient(circle at 90% 90%, rgba(187, 154, 247, 0.05) 0%, transparent 40%);
+        }
+
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: var(--bg-base);
+        }
+        ::-webkit-scrollbar-thumb {
+            background: var(--bg-surface-hover);
+            border-radius: 4px;
+        }
+
+        .header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 1.5rem;
+            padding-bottom: 1rem;
+            border-bottom: 1px solid var(--border-color);
+        }
+
+        .header-title {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .header-title h1 {
+            font-size: 1.4rem;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+            background: linear-gradient(135deg, #ffffff 0%, var(--text-secondary) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .pulse-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.4rem;
+            font-size: 0.75rem;
+            padding: 0.25rem 0.6rem;
+            border-radius: 99px;
+            background: rgba(79, 214, 190, 0.1);
+            color: var(--c-dev);
+            border: 1px solid rgba(79, 214, 190, 0.3);
+            font-weight: 500;
+        }
+
+        .pulse-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background-color: var(--c-dev);
+            box-shadow: 0 0 8px var(--c-dev);
+            animation: blink 1.8s infinite;
+        }
+
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.3; }
+        }
+
+        .controls {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        input[type="date"], button {
+            font-family: inherit;
+            background: var(--bg-surface);
+            color: var(--text-primary);
+            border: 1px solid var(--border-color);
+            padding: 0.45rem 0.85rem;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            outline: none;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        input[type="date"]:hover, button:hover {
+            border-color: var(--border-glow);
+            background: var(--bg-surface-hover);
+        }
+
+        .btn-primary {
+            background: rgba(122, 131, 194, 0.2);
+            border-color: rgba(122, 131, 194, 0.4);
+            font-weight: 500;
+        }
+
+        /* Metrics Grid */
+        .metrics-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .metric-card {
+            background: var(--bg-surface);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 1.1rem;
+            position: relative;
+            overflow: hidden;
+            transition: transform 0.2s ease, border-color 0.2s ease;
+        }
+
+        .metric-card:hover {
+            transform: translateY(-2px);
+            border-color: var(--border-glow);
+        }
+
+        .metric-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 3px;
+            height: 100%;
+        }
+
+        .card-time::before { background: var(--c-dev); }
+        .card-top::before { background: var(--c-term); }
+        .card-cat::before { background: var(--c-web); }
+        .card-count::before { background: var(--c-media); }
+
+        .metric-label {
+            font-size: 0.8rem;
+            color: var(--text-secondary);
+            margin-bottom: 0.4rem;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            font-weight: 500;
+        }
+
+        .metric-value {
+            font-size: 1.4rem;
+            font-weight: 700;
+            font-family: 'JetBrains Mono', monospace;
+            letter-spacing: -0.02em;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .metric-sub {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            margin-top: 0.3rem;
+        }
+
+        /* Charts & Details Layout */
+        .layout-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 1.5rem;
+            margin-bottom: 1.5rem;
+        }
+
+        .card-panel {
+            background: var(--bg-surface);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 1.25rem;
+        }
+
+        .panel-header {
+            font-size: 1rem;
+            font-weight: 600;
+            margin-bottom: 1rem;
+            color: var(--text-primary);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .chart-container {
+            position: relative;
+            height: 240px;
+            width: 100%;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 0.85rem;
+        }
+
+        th {
+            text-align: left;
+            padding: 0.6rem 0.8rem;
+            color: var(--text-muted);
+            font-weight: 500;
+            border-bottom: 1px solid var(--border-color);
+            text-transform: uppercase;
+            font-size: 0.75rem;
+            letter-spacing: 0.03em;
+        }
+
+        td {
+            padding: 0.65rem 0.8rem;
+            border-bottom: 1px solid rgba(122, 131, 194, 0.08);
+            color: var(--text-secondary);
+        }
+
+        tr:hover td {
+            background: var(--bg-surface-hover);
+            color: var(--text-primary);
+        }
+
+        .progress-bar-bg {
+            height: 6px;
+            background: rgba(122, 131, 194, 0.1);
+            border-radius: 3px;
+            overflow: hidden;
+            margin-top: 4px;
+        }
+
+        .progress-bar-fill {
+            height: 100%;
+            border-radius: 3px;
+            background: linear-gradient(90deg, var(--c-dev), var(--c-term));
+        }
+
+        .title-list {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+            font-family: 'JetBrains Mono', monospace;
+            margin-top: 2px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 380px;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="header">
+        <div class="header-title">
+            <h1>Activity Tracker Analytics</h1>
+            <div class="pulse-badge">
+                <div class="pulse-dot"></div>
+                Tracking Active
+            </div>
+        </div>
+        <div class="controls">
+            <input type="date" id="datePicker" onchange="fetchData()">
+            <button onclick="fetchData()">🔄 Refresh</button>
+            <button class="btn-primary" onclick="openMarkdown()">📄 Open .md Report</button>
+        </div>
+    </div>
+
+    <div class="metrics-grid">
+        <div class="metric-card card-time">
+            <div class="metric-label">Total Waktu Aktif</div>
+            <div class="metric-value" id="valTotalTime">-</div>
+            <div class="metric-sub">Durasi penggunaan PC</div>
+        </div>
+        <div class="metric-card card-top">
+            <div class="metric-label">Aplikasi Utama</div>
+            <div class="metric-value" id="valTopApp" style="color: var(--c-dev);">-</div>
+            <div class="metric-sub" id="subTopApp">Durasi terbanyak</div>
+        </div>
+        <div class="metric-card card-cat">
+            <div class="metric-label">Kategori Teratas</div>
+            <div class="metric-value" id="valTopCat" style="color: var(--c-web);">-</div>
+            <div class="metric-sub" id="subTopCat">Aktivitas utama</div>
+        </div>
+        <div class="metric-card card-count">
+            <div class="metric-label">Jumlah Aplikasi</div>
+            <div class="metric-value" id="valAppCount" style="color: var(--c-media);">-</div>
+            <div class="metric-sub">Aplikasi digunakan</div>
+        </div>
+    </div>
+
+    <div class="layout-grid">
+        <div class="card-panel">
+            <div class="panel-header">📊 Distribusi Kategori Aktivitas</div>
+            <div class="chart-container">
+                <canvas id="categoryChart"></canvas>
+            </div>
+        </div>
+        <div class="card-panel">
+            <div class="panel-header">🏆 Top Aplikasi Terbanyak</div>
+            <div class="chart-container">
+                <canvas id="appChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <div class="card-panel">
+        <div class="panel-header">📑 Rincian Penggunaan & Window Title</div>
+        <table>
+            <thead>
+                <tr>
+                    <th>Aplikasi</th>
+                    <th>Durasi Aktif</th>
+                    <th>Persentase & Ratio Bar</th>
+                    <th>Judul Window Utama</th>
+                </tr>
+            </thead>
+            <tbody id="tableBody">
+                <tr><td colspan="4" style="text-align:center;">Memuat data...</td></tr>
+            </tbody>
+        </table>
+    </div>
+
+    <script>
+        let chartCategory = null;
+        let chartApp = null;
+
+        function formatDuration(seconds) {
+            if (!seconds || seconds === 0) return '0d';
+            if (seconds < 60) return seconds + 'd';
+            let minutes = Math.floor(seconds / 60);
+            if (minutes < 60) return minutes + 'm ' + (seconds % 60) + 'd';
+            let hours = Math.floor(minutes / 60);
+            let remMin = minutes % 60;
+            return hours + 'j ' + remMin + 'm';
+        }
+
+        function categorize(appName) {
+            const name = appName.lower ? appName.lower() : String(appName).toLowerCase();
+            if (['steam', 'gamescope', 'lutris', 'heroic', 'dota', 'cs2', 'csgo', 'minecraft', 'roblox', 'proton', 'wine', 'emulator', 'ryujinx', 'yuzu', 'retroarch', 'game'].some(k => name.includes(k))) return 'Gaming';
+            if (['code', 'nvim', 'neovim', 'sublime', 'antigravity', 'idea', 'studio'].some(k => name.includes(k))) return 'Coding & Dev';
+            if (['kitty', 'foot', 'alacritty', 'wezterm', 'terminal', 'bash', 'zsh'].some(k => name.includes(k))) return 'Terminal';
+            if (['chrome', 'chromium', 'firefox', 'brave', 'zen', 'vivaldi', 'browser'].some(k => name.includes(k))) return 'Browser';
+            if (['spotify', 'vlc', 'mpv', 'gimp', 'inkscape', 'obs', 'discord'].some(k => name.includes(k))) return 'Media';
+            if (name.includes('desktop') || name.includes('idle')) return 'Idle';
+            return 'Lainnya';
+        }
+
+        // Set date picker default to today
+        document.getElementById('datePicker').value = new Date().toISOString().split('T')[0];
+
+        async function fetchData() {
+            const dateStr = document.getElementById('datePicker').value;
+            try {
+                const host = (window.location.protocol === 'file:' || !window.location.host) ? 'http://127.0.0.1:9877' : '';
+                const res = await fetch(`${host}/api/activity?date=${dateStr}`);
+                const data = await res.json();
+                renderAll(data);
+            } catch (err) {
+                console.error("Gagal mengambil data aktivitas, retrying...", err);
+                setTimeout(fetchData, 500);
+            }
+        }
+
+        function openMarkdown() {
+            const dateStr = document.getElementById('datePicker').value;
+            const host = (window.location.protocol === 'file:' || !window.location.host) ? 'http://127.0.0.1:9877' : '';
+            fetch(`${host}/api/open_md?date=${dateStr}`);
+        }
+
+        function renderAll(data) {
+            if (!data || !data.apps) {
+                document.getElementById('tableBody').innerHTML = '<tr><td colspan="4" style="text-align:center;">Belum ada log data untuk tanggal ini.</td></tr>';
+                return;
+            }
+
+            const totalSec = data.total_seconds || 1;
+            document.getElementById('valTotalTime').textContent = formatDuration(totalSec);
+
+            // Convert apps object to sorted array (Filter out incidental noise < 30s)
+            const appsArr = Object.entries(data.apps).map(([name, obj]) => ({
+                name,
+                seconds: obj.total_seconds,
+                titles: obj.titles || {}
+            })).filter(app => app.seconds >= 30).sort((a, b) => b.seconds - a.seconds);
+
+            document.getElementById('valAppCount').textContent = appsArr.length + ' Apps';
+
+            if (appsArr.length > 0) {
+                document.getElementById('valTopApp').textContent = cleanAppName(appsArr[0].name);
+                document.getElementById('subTopApp').textContent = formatDuration(appsArr[0].seconds);
+            }
+
+            // Categorize
+            const catMap = {};
+            appsArr.forEach(app => {
+                const cat = categorize(app.name);
+                catMap[cat] = (catMap[cat] || 0) + app.seconds;
+            });
+
+            const topCat = Object.entries(catMap).sort((a, b) => b[1] - a[1])[0];
+            if (topCat) {
+                document.getElementById('valTopCat').textContent = topCat[0];
+                document.getElementById('subTopCat').textContent = formatDuration(topCat[1]);
+            }
+
+            renderCategoryChart(catMap);
+            renderAppChart(appsArr.slice(0, 6));
+            renderTable(appsArr, totalSec);
+            window.scrollTo(0, 0);
+        }
+
+        function renderCategoryChart(catMap) {
+            if (typeof Chart === 'undefined') return;
+            const canvas = document.getElementById('categoryChart');
+            if (!canvas) return;
+            const ctx = canvas.getContext('2d');
+            const labels = Object.keys(catMap);
+            const dataVals = Object.values(catMap).map(v => Math.round(v / 60)); // in Minutes
+
+            if (chartCategory) chartCategory.destroy();
+
+            chartCategory = new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        data: dataVals,
+                        backgroundColor: ['#4fd6be', '#7aa2f7', '#f7768e', '#bb9af7', '#e0af68', '#565f89'],
+                        borderWidth: 2,
+                        borderColor: '#161325'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: 'right', labels: { color: '#a9b1d6', font: { family: 'Outfit' } } }
+                    }
+                }
+            });
+        }
+
+        function renderAppChart(topApps) {
+            if (typeof Chart === 'undefined') return;
+            const canvas = document.getElementById('appChart');
+            if (!canvas) return;
+            const ctx = canvas.getContext('2d');
+            const labels = topApps.map(a => cleanAppName(a.name));
+            const dataVals = topApps.map(a => Math.round(a.seconds / 60)); // in Minutes
+
+            if (chartApp) chartApp.destroy();
+
+            chartApp = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: 'Durasi (Menit)',
+                        data: dataVals,
+                        backgroundColor: '#7aa2f7',
+                        borderRadius: 6
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false }
+                    },
+                    scales: {
+                        x: { ticks: { color: '#a9b1d6', font: { family: 'Outfit' } }, grid: { display: false } },
+                        y: { ticks: { color: '#565f89', font: { family: 'JetBrains Mono' } }, grid: { color: 'rgba(122, 131, 194, 0.08)' } }
+                    }
+                }
+            });
+        }
+
+        function cleanAppName(name) {
+            if (!name) return 'Desktop / Idle';
+            if (name.includes('chrome-127.0.0.1')) return 'Network Analytics';
+            if (name.includes('satty')) return 'Satty (Screenshot)';
+            if (name.includes('dolphin')) return 'Dolphin File Manager';
+            if (name.includes('pavucontrol')) return 'Volume Control (Pavucontrol)';
+            if (name.includes('chromium')) return 'Chromium Browser';
+            if (name.includes('firefox')) return 'Firefox Browser';
+            if (name.includes('steam')) return 'Steam';
+            if (name.includes('ferdium')) return 'Ferdium';
+            return name;
+        }
+
+        function renderTable(appsArr, totalSec) {
+            const tbody = document.getElementById('tableBody');
+            tbody.innerHTML = '';
+
+            appsArr.forEach(app => {
+                const tr = document.createElement('tr');
+                const rawPct = (app.seconds / totalSec) * 100;
+                
+                let pctText = '';
+                if (rawPct > 0 && rawPct < 0.1) {
+                    pctText = '< 0.1%';
+                } else if (rawPct >= 0.1 && rawPct < 1) {
+                    pctText = rawPct.toFixed(1) + '%';
+                } else {
+                    pctText = Math.round(rawPct) + '%';
+                }
+
+                const barPct = app.seconds > 0 ? Math.max(2, Math.min(100, Math.round(rawPct))) : 0;
+
+                const sortedTitles = Object.entries(app.titles).sort((a, b) => b[1] - a[1]);
+                const topTitle = sortedTitles.length > 0 ? sortedTitles[0][0] : '-';
+                const displayName = cleanAppName(app.name);
+
+                tr.innerHTML = `
+                    <td style="font-weight: 600; color: var(--text-primary);" title="${app.name}">${displayName}</td>
+                    <td style="font-family: 'JetBrains Mono'; color: var(--c-dev);">${formatDuration(app.seconds)}</td>
+                    <td style="width: 25%;">
+                        <div style="font-size: 0.75rem; color: var(--text-muted);">${pctText}</div>
+                        <div class="progress-bar-bg">
+                            <div class="progress-bar-fill" style="width: ${barPct}%;"></div>
+                        </div>
+                    </td>
+                    <td>
+                        <div class="title-list" title="${topTitle}">${topTitle}</div>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        fetchData();
+        setInterval(fetchData, 10000);
+    </script>
+</body>
+</html>
