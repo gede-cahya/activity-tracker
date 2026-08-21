@@ -6,6 +6,20 @@ if ! pgrep -f "activity-gui --daemon" > /dev/null; then
     sleep 0.3
 fi
 
-# Launch App Dashboard Window with timestamp to force fresh fetch and eliminate cached 0% items
+PROFILE_DIR="/tmp/activity-dashboard-chrome-profile"
+mkdir -p "$PROFILE_DIR"
+touch "$PROFILE_DIR/First Run"
+
+# Launch App Dashboard Window with flags to skip ToS/Fre and enable floating window
 TS=$(date +%s)
-chromium --app="http://127.0.0.1:9877/index.html?t=${TS}" --user-data-dir="/tmp/activity-dashboard-chrome-profile" > /dev/null 2>&1 &
+chromium \
+    --app="http://127.0.0.1:9877/index.html?t=${TS}" \
+    --class="ActivityDashboard" \
+    --user-data-dir="$PROFILE_DIR" \
+    --no-first-run \
+    --no-default-browser-check \
+    --disable-session-crashed-bubble \
+    --disable-infobars \
+    --password-store=basic \
+    --disable-features=Translate,OptimizationHints \
+    > /dev/null 2>&1 &
